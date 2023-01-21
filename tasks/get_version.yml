@@ -138,7 +138,7 @@
          cat {{tmp_prefix}}nd00 | awk 'FNR==4' 1> {{tmp_prefix}}nd04
          cat {{tmp_prefix}}nd00 | awk 'FNR==5' 1> {{tmp_prefix}}nd05
          cat {{tmp_prefix}}nd00 | awk 'FNR==6' 1> {{tmp_prefix}}nd06
-         echo $(cat {{tmp_prefix}}hname),$(cat {{tmp_prefix}}app),$(cat {{tmp_prefix}}os),$(cat {{tmp_prefix}}kv),$(cat {{tmp_prefix}}bu),$(cat {{tmp_prefix}}man),$(cat {{tmp_prefix}}vm),\"$(cat {{tmp_prefix}}sw01) >> {{path_log}}
+         echo $(cat {{tmp_prefix}}hname),$(cat {{tmp_prefix}}app),$(cat {{tmp_prefix}}os),$(cat {{tmp_prefix}}kv),$(cat {{tmp_prefix}}ansible),$(cat {{tmp_prefix}}bu),$(cat {{tmp_prefix}}man),$(cat {{tmp_prefix}}vm),\"$(cat {{tmp_prefix}}sw01) >> {{path_log}}
          if [ -s {{tmp_prefix}}sw02 ]; then echo $(cat {{tmp_prefix}}sw02) >> {{path_log}}; fi
          if [ -s {{tmp_prefix}}sw03 ]; then echo $(cat {{tmp_prefix}}sw03) >> {{path_log}}; fi
          if [ -s {{tmp_prefix}}sw04 ]; then echo $(cat {{tmp_prefix}}sw04) >> {{path_log}}; fi
