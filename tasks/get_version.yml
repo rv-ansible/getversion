@@ -46,7 +46,7 @@
   shell: |
          echo 'Hostname, APP,"OS' >> {{path_log}}
          echo 'Release","Kernel' >> {{path_log}}
-         echo 'Version","Baseline' >> {{path_log}}
+         echo 'Version",Ansible,"Baseline' >> {{path_log}}
          echo 'Update",Manufacturer,"VM' >> {{path_log}}
          echo 'Version",Software,"HBA' >> {{path_log}}
          echo 'Firmware","NIC' >> {{path_log}}
@@ -67,6 +67,8 @@
          cat /etc/redhat-release | awk '{print $7}' 1> {{tmp_prefix}}os
          uname -or | awk '{print $1}' > {{tmp_prefix}}kv
          sed -i 's/.x86_64//g' {{tmp_prefix}}kv
+         ansible --version 1> {{tmp_prefix}}ansible1
+         awk 'FNR <= 1' {{tmp_prefix}}ansible1 1> {{tmp_prefix}}ansible
          subscription-manager identity | grep environment | awk -F '/' '{print $2}' 1> {{tmp_prefix}}bu
          dmidecode -s system-manufacturer 1> {{tmp_prefix}}man1
          cat {{tmp_prefix}}man1|tr -d ,. > {{tmp_prefix}}man

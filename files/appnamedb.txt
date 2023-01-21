@@ -1,3 +1,3 @@
-SKOPE: server1 server5 server2
-EPBS:  server3
-CIPG:  server4
+VC01: server1 server5 server2
+EPES:  server3
+CPIC:  server4

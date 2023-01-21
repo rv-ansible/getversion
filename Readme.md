@@ -25,9 +25,9 @@ Instructions:
         
      Special DB about APP NAME (files/appnamedb.txt):
      
-     SKOPE: server1 server5 server2 
-     EPBS:  server3                                 
-     CIPG:  server4                                   
+     VCS01: server1 server5 server2 
+     EPSB:  server3                                 
+     CPCG:  server4                                   
 
      You create this file with special naming of the APP name, make sure it's LOWERCASE and NO-FQDN
      otherwise it will just get the first 3-4 characters of the hostname. In the example above, if it
