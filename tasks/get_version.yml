@@ -12,28 +12,28 @@
     mode: '0555'
   when: w.stdout | regex_search('oracle')
     
-- name: search HP    
-  shell: dmidecode -s system-manufacturer
-  become: true
-  register: x      
+# - name: search HP    
+#   shell: dmidecode -s system-manufacturer
+#   become: true
+#   register: x      
     
-- name: search hponcfg
-  shell: rpm -qa hponcfg
-  register: y
-  failed_when: "y.rc == 2"
-  when: x.stdout | regex_search('HP')
+# - name: search hponcfg
+#   shell: rpm -qa hponcfg
+#   register: y
+#   failed_when: "y.rc == 2"
+#   when: x.stdout | regex_search('HP')
   
-- block:  
-    - name: copy hponcfg      
-      copy: 
-         src: hponcfg-5.5.0-0.x86_64.rpm
-         dest: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
-    - name: install hponcfg
-      yum: 
-        name: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
-        state: present
-      become: true
-  when: x.stdout | regex_search('HP') and not(y.stdout | regex_search('hponcfg'))
+# - block:  
+#     - name: copy hponcfg      
+#       copy: 
+#          src: hponcfg-5.5.0-0.x86_64.rpm
+#          dest: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
+#     - name: install hponcfg
+#       yum: 
+#         name: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
+#         state: present
+#       become: true
+#   when: x.stdout | regex_search('HP') and not(y.stdout | regex_search('hponcfg'))
   
 - name: copy appnamedb.txt
   copy: 
