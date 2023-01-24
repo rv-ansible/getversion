@@ -1,0 +1,3 @@
+SKOPE: ske-bccld1app01 ske-bccld1web01 podrbccls4app02
+EPBS:  epbsbccld1app01
+CIPG:  cpbccld1app02

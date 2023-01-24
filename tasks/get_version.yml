@@ -1,0 +1,155 @@
+---
+
+- name: check oracle
+  shell: grep oracle /etc/passwd
+  register: w
+  failed_when: "w.rc == 2"
+
+- name: copy getoracle to tmp
+  copy:
+    src: getoracle.sh
+    dest: "{{tmp_folder}}"
+    mode: '0555'
+  when: w.stdout | regex_search('oracle')
+    
+- name: search HP    
+  shell: dmidecode -s system-manufacturer
+  become: true
+  register: x      
+    
+- name: search hponcfg
+  shell: rpm -qa hponcfg
+  register: y
+  failed_when: "y.rc == 2"
+  when: x.stdout | regex_search('HP')
+  
+- block:  
+    - name: copy hponcfg      
+      copy: 
+         src: hponcfg-5.5.0-0.x86_64.rpm
+         dest: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
+    - name: install hponcfg
+      yum: 
+        name: "{{tmp_folder}}/hponcfg-5.5.0-0.x86_64.rpm"
+        state: present
+      become: true
+  when: x.stdout | regex_search('HP') and not(y.stdout | regex_search('hponcfg'))
+  
+- name: copy appnamedb.txt
+  copy: 
+    src: appnamedb.txt
+    dest: "{{tmp_folder}}/appnamedb.txt"
+    mode: 0644 
+  become: true   
+
+- name: Get version console header
+  shell: |
+         echo 'Hostname, APP,"OS' >> {{path_log}}
+         echo 'Release","Kernel' >> {{path_log}}
+         echo 'Version","Baseline' >> {{path_log}}
+         echo 'Update",Manufacturer,"VM' >> {{path_log}}
+         echo 'Version",Software,"HBA' >> {{path_log}}
+         echo 'Firmware","NIC' >> {{path_log}}
+         echo 'Card","NIC' >> {{path_log}}
+         echo 'Driver::Version::Firmware","ILO' >> {{path_log}}
+         echo 'Firmware"' >> {{path_log}}
+  become: true
+  run_once: true
+  ignore_errors: true
+             
+- name: Get version console
+  shell: |
+         hostname -s 1> {{tmp_prefix}}hname1
+         tr '[A-Z]' '[a-z]' < {{tmp_prefix}}hname1 1> {{tmp_prefix}}hname
+         grep $(cat {{tmp_prefix}}hname) {{tmp_folder}}/appnamedb.txt | awk '{ print $1 }'|tr -d : 1> {{tmp_prefix}}app1
+         [ ! -s {{tmp_prefix}}app1 ] && echo -e $(cat {{tmp_prefix}}hname)|cut -b 1,2,3,4|tr -d -  1> {{tmp_prefix}}app1
+         tr '[a-z]' '[A-Z]' < {{tmp_prefix}}app1 1> {{tmp_prefix}}app  
+         cat /etc/redhat-release | awk '{print $7}' 1> {{tmp_prefix}}os
+         uname -or | awk '{print $1}' > {{tmp_prefix}}kv
+         sed -i 's/.x86_64//g' {{tmp_prefix}}kv
+         subscription-manager identity | grep environment | awk -F '/' '{print $2}' 1> {{tmp_prefix}}bu
+         dmidecode -s system-manufacturer 1> {{tmp_prefix}}man1
+         cat {{tmp_prefix}}man1|tr -d ,. > {{tmp_prefix}}man
+         vmware-toolbox-cmd -v 1> {{tmp_prefix}}vm
+         su - oracle -c "{{tmp_folder}}/getoracle.sh" 1> {{tmp_prefix}}ora    
+         [ -s {{tmp_prefix}}ora ] && echo 'Oracle: ' $(cat {{tmp_prefix}}ora) > {{tmp_prefix}}ora
+         systool -a -v -c scsi_host|grep firmware_revision | awk -F "=" '{ print $2 }' 1> {{tmp_prefix}}hba1
+         cat {{tmp_prefix}}hba1 | tr -d '"' > {{tmp_prefix}}hba
+         lspci | grep Eth | awk -F ':' '{print $NF}' | uniq -c | awk 'FNR==1' | cut -c1-60 | tr -d '(' | tr -d ')' 1> {{tmp_prefix}}nc1
+         lspci | grep Eth | awk -F ':' '{print $NF}' | uniq -c | awk 'FNR==2' | cut -c1-60 | tr -d '(' | tr -d ')' 1> {{tmp_prefix}}nc2
+         lspci | grep Eth | awk -F ':' '{print $NF}' | uniq -c | awk 'FNR==3' | cut -c1-60 | tr -d '(' | tr -d ')' 1> {{tmp_prefix}}nc3
+         lspci | grep Eth | awk -F ':' '{print $NF}' | uniq -c | awk 'FNR==4' | cut -c1-60 | tr -d '(' | tr -d ')' 1> {{tmp_prefix}}nc4
+         ifconfig -a 1> {{tmp_prefix}}nic
+         while read n; do echo "$n"|cut -c1-15 1> {{tmp_prefix}}nictmp; if [ "$(cat {{tmp_prefix}}nictmp|cut -c1-3)" == "eth" ] && [ "$(cat {{tmp_prefix}}nictmp|cut -c1-5)" != "ether" ] || [ "$(cat {{tmp_prefix}}nictmp|cut -c1-3)" == "eno" ] || [ "$(cat {{tmp_prefix}}nictmp|cut -c1-4)" == "bond" ] || [ "$(cat {{tmp_prefix}}nictmp|cut -c1-3)" == "ens" ]; then cat {{tmp_prefix}}nictmp|cut -c1-15 1>> {{tmp_prefix}}niclist; fi ; done < {{tmp_prefix}}nic
+         cat {{tmp_prefix}}niclist | awk '{ print $1 }' | tr -d ':' 1> {{tmp_prefix}}niclist2
+         sort {{tmp_prefix}}niclist2 > {{tmp_prefix}}niclist3
+         cat {{tmp_prefix}}niclist3| uniq > {{tmp_prefix}}niclist4
+         rm -f {{tmp_prefix}}nic
+         for NIC in $(cat {{tmp_prefix}}niclist4); do ethtool -i $NIC|grep driver|awk '{print $2" "$3" "$4" "$5}' 1> {{tmp_prefix}}ndriv; ethtool -i $NIC|grep version|grep -v firmware-version|awk '{print $2" "$3" "$4" "$5}' 1> {{tmp_prefix}}nver; ethtool -i $NIC|grep firmware-version|awk '{print $2" "$3" "$4" "$5}' 1> {{tmp_prefix}}nfw; echo $(cat {{tmp_prefix}}ndriv) :: $(cat {{tmp_prefix}}nver) :: $(cat {{tmp_prefix}}nfw) 1>> {{tmp_prefix}}nic; sed -i 's/,//g' {{tmp_prefix}}nic; done
+         sort {{tmp_prefix}}nic | uniq > {{tmp_prefix}}nic-trim
+         sed -i 's/:: :://g' {{tmp_prefix}}nic-trim
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==1' 1> {{tmp_prefix}}nd1
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==2' 1> {{tmp_prefix}}nd2
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==3' 1> {{tmp_prefix}}nd3
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==4' 1> {{tmp_prefix}}nd4
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==5' 1> {{tmp_prefix}}nd5
+         cat {{tmp_prefix}}nic-trim | awk 'FNR==6' 1> {{tmp_prefix}}nd6
+         hponcfg|grep 'Firmware Revision' | awk -F '=' '{ print $3 }' | cut -c1-7 1> {{tmp_prefix}}ilo1 
+         hponcfg|grep 'Firmware Revision' | awk -F '=' '{ print $2 }' | cut -c1-5 1> {{tmp_prefix}}ilo2
+         [ -s {{tmp_prefix}}ilo1 ] || [ -s {{tmp_prefix}}ilo2 ] && echo $(cat {{tmp_prefix}}ilo1) :: $(cat {{tmp_prefix}}ilo2) 1> {{tmp_prefix}}ilo || touch {{tmp_prefix}}ilo   
+         /opt/apps/IBM/WebSphere/AppServer/bin/versionInfo.sh 1> {{tmp_prefix}}was2
+         [ ! -s {{tmp_prefix}}was2 ] && /opt/IBM/WebSphere/AppServer/bin/versionInfo.sh 1> {{tmp_prefix}}was2
+         [ ! -s {{tmp_prefix}}was2 ] && /opt/apps/aci/IP/WebSphere/bin/versionInfo.sh 1> {{tmp_prefix}}was2
+         [ ! -s {{tmp_prefix}}was2 ] && /opt/apps/IBM/enReport/WebSphere/AppServer/bin/versionInfo.sh 1> {{tmp_prefix}}was2         
+         grep -hnr -A1 "IBM WebSphere Application Server Network Deployment" {{tmp_prefix}}was2 1> {{tmp_prefix}}was3
+         cat {{tmp_prefix}}was3|grep Version | awk '{print $2}' 1> {{tmp_prefix}}was
+         [ -s {{tmp_prefix}}was ] && echo 'Websphere: ' $(cat {{tmp_prefix}}was) > {{tmp_prefix}}was
+         /opt/apps/IBM/HTTPServer/bin/apachectl -v 1> {{tmp_prefix}}ihs2
+         [ ! -s {{tmp_prefix}}ihs2 ] && /opt/IBM/HTTPServer/bin/apachectl -v 1> {{tmp_prefix}}ihs2
+         [ ! -s {{tmp_prefix}}ihs2 ] && /opt/apps/IBM/HTTPServer9/bin/apachectl -v 1> {{tmp_prefix}}ihs2
+         [ ! -s {{tmp_prefix}}ihs2 ] && /opt/apps/IBM/IHS9/HTTPServer/bin/apachectl -v 1> {{tmp_prefix}}ihs2
+         [ ! -s {{tmp_prefix}}ihs2 ] && /opt/apps/IBM/HTTPServer_BOE/bin/apachectl -v 1> {{tmp_prefix}}ihs2
+         cat {{tmp_prefix}}ihs2 | awk -F '/' '{print $2}' | head -n 1 | awk '{ print $1 }' 1> {{tmp_prefix}}ihs
+         [ -s {{tmp_prefix}}ihs ] && echo 'IHS: ' $(cat {{tmp_prefix}}ihs) > {{tmp_prefix}}ihs
+         rpm -qa | grep -i mqseriesclient | head -n 1 | awk -F "-" '{ print $2 }' 1> {{tmp_prefix}}mq
+         [ -s {{tmp_prefix}}mq ] && echo 'MQ: ' $(cat {{tmp_prefix}}mq) > {{tmp_prefix}}mq
+         rpm -qa|grep -i VRTSvcs | grep -v VRTSvcswiz|grep -v VRTSvcsea|grep -v VRTSvcsag | head -n 1 | awk -F "-" '{ print $2 }' 1> {{tmp_prefix}}veritas
+         [ -s {{tmp_prefix}}veritas ] && echo 'Veritas: ' $(cat {{tmp_prefix}}veritas) > {{tmp_prefix}}veritas
+         cat /opt/dynatrace/oneagent/agent/installer.version | awk -F . '{ print $1"."$2"."$3 }' 1> {{tmp_prefix}}dynatrace1
+         [ -s {{tmp_prefix}}dynatrace1 ] && echo 'Dynatrace: ' $(cat {{tmp_prefix}}dynatrace1) > {{tmp_prefix}}dynatrace
+         cat {{tmp_prefix}}ora {{tmp_prefix}}was {{tmp_prefix}}ihs {{tmp_prefix}}mq {{tmp_prefix}}veritas {{tmp_prefix}}dynatrace > {{tmp_prefix}}sw00          
+         cat {{tmp_prefix}}sw00 | awk 'FNR==1' 1> {{tmp_prefix}}sw01
+         cat {{tmp_prefix}}sw00 | awk 'FNR==2' 1> {{tmp_prefix}}sw02
+         cat {{tmp_prefix}}sw00 | awk 'FNR==3' 1> {{tmp_prefix}}sw03
+         cat {{tmp_prefix}}sw00 | awk 'FNR==4' 1> {{tmp_prefix}}sw04
+         cat {{tmp_prefix}}sw00 | awk 'FNR==5' 1> {{tmp_prefix}}sw05
+         cat {{tmp_prefix}}sw00 | awk 'FNR==6' 1> {{tmp_prefix}}sw06
+         cat {{tmp_prefix}}nc1 {{tmp_prefix}}nc2 {{tmp_prefix}}nc3 {{tmp_prefix}}nc4 > {{tmp_prefix}}nc
+         cat {{tmp_prefix}}nc | awk 'FNR==1' 1> {{tmp_prefix}}nc01
+         cat {{tmp_prefix}}nc | awk 'FNR==2' 1> {{tmp_prefix}}nc02
+         cat {{tmp_prefix}}nc | awk 'FNR==3' 1> {{tmp_prefix}}nc03
+         cat {{tmp_prefix}}nc | awk 'FNR==4' 1> {{tmp_prefix}}nc04
+         cat {{tmp_prefix}}nd1 {{tmp_prefix}}nd2 {{tmp_prefix}}nd3 {{tmp_prefix}}nd4 {{tmp_prefix}}nd5 {{tmp_prefix}}nd6 > {{tmp_prefix}}nd00
+         cat {{tmp_prefix}}nd00 | awk 'FNR==1' 1> {{tmp_prefix}}nd01
+         cat {{tmp_prefix}}nd00 | awk 'FNR==2' 1> {{tmp_prefix}}nd02
+         cat {{tmp_prefix}}nd00 | awk 'FNR==3' 1> {{tmp_prefix}}nd03
+         cat {{tmp_prefix}}nd00 | awk 'FNR==4' 1> {{tmp_prefix}}nd04
+         cat {{tmp_prefix}}nd00 | awk 'FNR==5' 1> {{tmp_prefix}}nd05
+         cat {{tmp_prefix}}nd00 | awk 'FNR==6' 1> {{tmp_prefix}}nd06
+         echo $(cat {{tmp_prefix}}hname),$(cat {{tmp_prefix}}app),$(cat {{tmp_prefix}}os),$(cat {{tmp_prefix}}kv),$(cat {{tmp_prefix}}bu),$(cat {{tmp_prefix}}man),$(cat {{tmp_prefix}}vm),\"$(cat {{tmp_prefix}}sw01) >> {{path_log}}
+         if [ -s {{tmp_prefix}}sw02 ]; then echo $(cat {{tmp_prefix}}sw02) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}sw03 ]; then echo $(cat {{tmp_prefix}}sw03) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}sw04 ]; then echo $(cat {{tmp_prefix}}sw04) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}sw05 ]; then echo $(cat {{tmp_prefix}}sw05) >> {{path_log}}; fi
+         [ -s {{tmp_prefix}}sw06 ] && echo $(cat {{tmp_prefix}}sw06)\",$(cat {{tmp_prefix}}hba),\"$(cat {{tmp_prefix}}nc01) || echo \",$(cat {{tmp_prefix}}hba),\"$(cat {{tmp_prefix}}nc01) >> {{path_log}}
+         if [ -s {{tmp_prefix}}nc02 ]; then echo $(cat {{tmp_prefix}}nc02) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}nc03 ]; then echo $(cat {{tmp_prefix}}nc03) >> {{path_log}}; fi
+         [ -s {{tmp_prefix}}nc04 ] && echo $(cat {{tmp_prefix}}nc04)\",\"$(cat {{tmp_prefix}}nd01) || echo \",\"$(cat {{tmp_prefix}}nd01) >> {{path_log}}
+         if [ -s {{tmp_prefix}}nd02 ]; then echo $(cat {{tmp_prefix}}nd02) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}nd03 ]; then echo $(cat {{tmp_prefix}}nd03) >> {{path_log}}; fi
+         if [ -s {{tmp_prefix}}nd04 ]; then echo $(cat {{tmp_prefix}}nd04) >> {{path_log}}; fi         
+         if [ -s {{tmp_prefix}}nd05 ]; then echo $(cat {{tmp_prefix}}nd05) >> {{path_log}}; fi
+         [ -s cat {{tmp_prefix}}nd06 ] && echo $(cat {{tmp_prefix}}nd06)\",$(cat {{tmp_prefix}}ilo) || echo \",$(cat {{tmp_prefix}}ilo)>> {{path_log}}
+  become: true
+
+
