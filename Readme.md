@@ -25,13 +25,13 @@ Instructions:
         
      Special DB about APP NAME (files/appnamedb.txt):
      
-     SKOPE: ske-bccld1app01 ske-bccld1web01 podrbccls4app02 
-     EPBS:  epbsbccld1app01                                 
-     CIPG:  cpbccld1app02                                   
+     SKOPE: server1 server5 server2 
+     EPBS:  server3                                 
+     CIPG:  server4                                   
 
      You create this file with special naming of the APP name, make sure it's LOWERCASE and NO-FQDN
      otherwise it will just get the first 3-4 characters of the hostname. In the example above, if it
-     encounter the server ske-bccld1app01, the APP name will be SKOPE not SKE.
+     encounter the server server1, the APP name will be SKOPE not SKE.
 
 
 
